@@ -55,11 +55,18 @@ static void BYH_M_thread_entry(void *parameter)
 	BYH_M_get_PM_Data(&BYH_DATA);
 	rt_thread_mdelay(1000);
 	
+	/* 发送数据到邮箱中 */
+	rt_mb_send(&iot_mb, (rt_uint32_t)BYH_DATA.Temperature_x10);
+	rt_mb_send(&iot_mb, (rt_uint32_t)BYH_DATA.Humidity_x10);
+	rt_mb_send(&iot_mb, (rt_uint32_t)BYH_DATA.Noise_x10);
+	rt_mb_send(&iot_mb, (rt_uint32_t)BYH_DATA.PM2_5);
+	rt_mb_send(&iot_mb, (rt_uint32_t)BYH_DATA.PM10);
 	rt_mb_send(&led_mb, (rt_uint32_t)BYH_DATA.Temperature_x10);
 	rt_mb_send(&led_mb, (rt_uint32_t)BYH_DATA.Humidity_x10);
 	rt_mb_send(&led_mb, (rt_uint32_t)BYH_DATA.Noise_x10);
 	rt_mb_send(&led_mb, (rt_uint32_t)BYH_DATA.PM2_5);
 	rt_mb_send(&led_mb, (rt_uint32_t)BYH_DATA.PM10);
+	rt_sem_release(sem_one);
 	rt_sem_release(sem_two);
 	while(1)
 	{
@@ -70,20 +77,20 @@ static void BYH_M_thread_entry(void *parameter)
 		}
 		times++;
 		
-		if(times==1)
+		if(times==60)
 		{
 			times=0;
 			
 			if(BYH_M_get_humiture(&BYH_DATA)==RT_ERROR)
 				rt_kprintf("[BYH_M]Get humiture Error!\n");
 			else
-				rt_kprintf("温度：%d C,湿度：%d %\n",BYH_DATA.Temperature_x10,BYH_DATA.Humidity_x10);
+				rt_kprintf("温度x10：%d C,湿度x10：%d %\n",BYH_DATA.Temperature_x10,BYH_DATA.Humidity_x10);
 			rt_thread_mdelay(1000);
 			
 			if(BYH_M_get_noise(&BYH_DATA)==RT_ERROR)
 				rt_kprintf("[BYH_M]Get noise Error!\n");
 			else
-				rt_kprintf("噪音：%d db\n",BYH_DATA.Noise_x10);
+				rt_kprintf("噪音x10：%d db\n",BYH_DATA.Noise_x10);
 			rt_thread_mdelay(1000);
 			
 			if(BYH_M_get_PM_Data(&BYH_DATA)==RT_ERROR)
@@ -182,7 +189,7 @@ static void NB_IOT_thread_entry(void *parameter)
 
 static void LED_thread_entry(void *parameter)
 {
-	int i=0,j=0;
+	int i=0;
 	int t,h,n,p2,p10;
 	char t1[12]=":--.- C",
 		 h1[12]=":--.-",
@@ -207,37 +214,37 @@ static void LED_thread_entry(void *parameter)
 	{
 		if(rt_sem_trytake(sem_two)==RT_EOK)
 		{
+			
 			/* 从邮箱中收取邮件 */
 			if(rt_mb_recv(&led_mb, (rt_uint32_t *)&t,  500)==RT_EOK)
 			{
 				sprintf(t1,":%0.1f C",t/10.0);
-				rt_kprintf("%s\n",t1);
+//				rt_kprintf("%s\n",t1);
 			}
 			if(rt_mb_recv(&led_mb, (rt_uint32_t *)&h,  500)==RT_EOK)
 			{
 				sprintf(h1,":%0.1f",h/10.0);
-				rt_kprintf("%s\n",h1);
+//				rt_kprintf("%s\n",h1);
 			}
 			if(rt_mb_recv(&led_mb, (rt_uint32_t *)&n,  500)==RT_EOK)
 			{
 				sprintf(z1,":%0.1fdb",n/10.0);
-				rt_kprintf("%s\n",z1);
+//				rt_kprintf("%s\n",z1);
 			}
 			if(rt_mb_recv(&led_mb, (rt_uint32_t *)&p2,  500)==RT_EOK)
 			{
 				sprintf(pm2_5," 2.5:%dug/m3",p2);
-				rt_kprintf("%s\n",pm2_5);
+//				rt_kprintf("%s\n",pm2_5);
 			}
 			if(rt_mb_recv(&led_mb, (rt_uint32_t *)&p10,  500)==RT_EOK)
 			{
 				sprintf(pm10, "  10:%dug/m3",p10);
-				rt_kprintf("%s\n",pm10);
+//				rt_kprintf("%s\n",pm10);
 			}
+			rt_kprintf("\nLED显示屏数据刷新成功！\n");
+			rt_kprintf("\n");
 		}
-		if(i==6000)
-		{
-			i=0;
-		}
+		
 		if((i%500)==0)
 		{
 			LED_Clear();
@@ -249,20 +256,16 @@ static void LED_thread_entry(void *parameter)
 			LED_ShowString(9,6,12,"%RH");
 			LED_ShowNChese(0,9,12,2,"噪音");
 			LED_ShowString(4,9,12,z1);
-//			rt_kprintf("%s\n",t1);
-//			rt_kprintf("%s\n",h1);
-//			rt_kprintf("%s\n",z1);
 		}
 		if((i%1000)==0)
 		{
+			i=0;
 			LED_Clear();
 			LED_ShowNChese(3,0,12,4,"扬尘监测");
 			LED_ShowString(0,3,12,"PM");
 			LED_ShowChese(2,3,12,"值");
 			LED_ShowString(0,6,12,pm2_5);
 			LED_ShowString(0,9,12,pm10);
-//			rt_kprintf("%s\n",pm2_5);
-//			rt_kprintf("%s\n",pm10);
 		}
 		LED_SendData();
 		rt_thread_mdelay(10);
